@@ -147,7 +147,7 @@ class YoLov5TRT(object):
         self.batch_size = engine.max_batch_size
 
 
-    def detect(self, raw_image_generator):
+    def detect(self, raw_image_generator, query_param=None, draw_bbox_image=False):
         t1 = time.process_time()  
         threading.Thread.__init__(self)
         # Make self the active context, pushing it on top of the context stack.
@@ -201,22 +201,28 @@ class YoLov5TRT(object):
             result_boxes, result_scores, result_classid = self.post_process(
                 output[i * 6001: (i + 1) * 6001], batch_origin_h[i], batch_origin_w[i]
             )
-            # Draw rectangles and labels on the original image
-            for j in range(len(result_boxes)):
-                box = result_boxes[j]
-                plot_one_box(
-                    box,
-                    batch_image_raw[i],
-                    label="{}:{:.2f}".format(
-                        categories[int(result_classid[j])], result_scores[j]
-                    ),
-                )
+            if draw_bbox_image:
+                # Draw rectangles and labels on the original image
+                for j in range(len(result_boxes)):
+                    box = result_boxes[j]
+                    plot_one_box(
+                        box,
+                        batch_image_raw[i],
+                        label="{}:{:.2f}".format(
+                            categories[int(result_classid[j])], result_scores[j]
+                        ),
+                    )
             
             if result_boxes is not None and len(result_boxes)>0:
                 for box, clf, score in zip(result_boxes, result_classid, result_scores):
                     #print(clf,"\t", score, "\t", box)
                     box_list = list(map(int, box.tolist()))
-                    detection_results.append({"rect": box_list, "conf": float(score),"cls": int(clf)})
+                    if query_param is not None and len(query_param)>0:
+                        clf_index = categories.index(query_param)
+                        if clf_index == int(clf):
+                            detection_results.append({"rect": box_list, "conf": float(score),"cls": int(clf)})
+                    else:
+                        detection_results.append({"rect": box_list, "conf": float(score),"cls": int(clf)})
         t4 = time.process_time()
         print('Prep:{0:3.1f}ms,\t  Infr:{1:3.1f}ms,\t  Post:{2:3.1f}ms, \t\t {3} detections in {4:3.1f}ms'.format((t2-t1)*1000, (t3-t2)*1000, (t4-t3)*1000, len(detection_results), (t4-t1)*1000))
         return batch_image_raw, detection_results
